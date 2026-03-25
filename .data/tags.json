@@ -1,0 +1,24 @@
+{
+  "tags": [
+    {
+      "id": "tag_1774456519286_yymx7mpzy",
+      "name": "MacOS",
+      "color": "#EC4899",
+      "createdAt": "2026-03-25T16:35:19.286Z"
+    },
+    {
+      "id": "tag_1774456536319_6jqdjrx3o",
+      "name": "TESTTAG",
+      "color": "#F97316",
+      "createdAt": "2026-03-25T16:35:36.319Z"
+    }
+  ],
+  "fileTags": {
+    "1774452127639______6.pdf": [
+      "tag_1774456536319_6jqdjrx3o"
+    ],
+    "1774456503559_iTerm2-3_6_9.zip": [
+      "tag_1774456519286_yymx7mpzy"
+    ]
+  }
+}
