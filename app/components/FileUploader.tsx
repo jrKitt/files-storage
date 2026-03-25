@@ -286,10 +286,15 @@ export default function FileUploader({ token, role, allTags, selectedTag }: File
       const anchor = document.createElement("a");
       anchor.href = objectUrl;
       anchor.download = file.name;
+      anchor.style.display = "none";
       document.body.appendChild(anchor);
       anchor.click();
-      document.body.removeChild(anchor);
-      URL.revokeObjectURL(objectUrl);
+
+      // Delay cleanup for Safari/webkit so download can start reliably.
+      window.setTimeout(() => {
+        URL.revokeObjectURL(objectUrl);
+        anchor.remove();
+      }, 1000);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Failed to download file");
       setIsError(true);
@@ -495,9 +500,22 @@ export default function FileUploader({ token, role, allTags, selectedTag }: File
                       <button
                         type="button"
                         onClick={() => void downloadFile(file)}
-                        className="text-left text-sm font-medium text-blue-200 underline decoration-blue-700 underline-offset-4 transition hover:text-blue-100"
+                        className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-blue-700/70 bg-blue-900/30 px-3 py-2 text-left text-base font-semibold text-blue-100 transition hover:border-blue-500 hover:bg-blue-800/40 hover:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        title={`Download ${file.name}`}
                       >
-                        {file.name}
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          className="h-5 w-5"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 4v10" strokeLinecap="round" />
+                          <path d="M8.5 10.5L12 14l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M4.5 16.5v1a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-1" strokeLinecap="round" />
+                        </svg>
+                        <span className="truncate">{file.name}</span>
                       </button>
                       <p className="mt-1 text-xs text-slate-400">
                         {formatBytes(file.size)} | {formatDateTime(file.uploadedAt)}
