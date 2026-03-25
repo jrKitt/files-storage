@@ -1,6 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import crypto from "node:crypto";
+import { getAdminDatabase } from "@/lib/firebase-admin";
 
 export interface ApiKeyItem {
   id: string;
@@ -32,8 +31,7 @@ interface PublicApiKeyItem {
   updatedAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
+const SETTINGS_NODE = "appData/systemSettings";
 
 const defaultSettings: SystemSettingsData = {
   apiKeys: [],
@@ -43,15 +41,16 @@ const defaultSettings: SystemSettingsData = {
   },
 };
 
-async function ensureDataDir() {
-  await mkdir(DATA_DIR, { recursive: true });
-}
-
 async function readSettings(): Promise<SystemSettingsData> {
   try {
-    await ensureDataDir();
-    const content = await readFile(SETTINGS_FILE, "utf-8");
-    const parsed = JSON.parse(content) as Partial<SystemSettingsData>;
+    const db = getAdminDatabase();
+    const snapshot = await db.ref(SETTINGS_NODE).get();
+    const parsed = (snapshot.val() || null) as Partial<SystemSettingsData> | null;
+
+    if (!parsed) {
+      return defaultSettings;
+    }
+
     return {
       apiKeys: parsed.apiKeys || [],
       github: {
@@ -67,8 +66,8 @@ async function readSettings(): Promise<SystemSettingsData> {
 }
 
 async function writeSettings(data: SystemSettingsData): Promise<void> {
-  await ensureDataDir();
-  await writeFile(SETTINGS_FILE, JSON.stringify(data, null, 2));
+  const db = getAdminDatabase();
+  await db.ref(SETTINGS_NODE).set(data);
 }
 
 function maskApiKey(value: string): string {

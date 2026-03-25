@@ -268,6 +268,34 @@ export default function FileUploader({ token, role, allTags, selectedTag }: File
     }
   };
 
+  const downloadFile = async (file: UploadedFile) => {
+    try {
+      const response = await fetch(file.url, {
+        headers: { "x-auth-token": token },
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as
+          | { error?: string; details?: string }
+          | null;
+        throw new Error(body?.details || body?.error || "Failed to download file");
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = file.name;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to download file");
+      setIsError(true);
+    }
+  };
+
   return (
     <main className="flex-1 overflow-y-auto bg-slate-950 px-4 py-4 md:px-8 md:py-6">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
@@ -464,14 +492,13 @@ export default function FileUploader({ token, role, allTags, selectedTag }: File
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <a
-                        href={file.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm font-medium text-blue-200 underline decoration-blue-700 underline-offset-4 transition hover:text-blue-100"
+                      <button
+                        type="button"
+                        onClick={() => void downloadFile(file)}
+                        className="text-left text-sm font-medium text-blue-200 underline decoration-blue-700 underline-offset-4 transition hover:text-blue-100"
                       >
                         {file.name}
-                      </a>
+                      </button>
                       <p className="mt-1 text-xs text-slate-400">
                         {formatBytes(file.size)} | {formatDateTime(file.uploadedAt)}
                       </p>

@@ -1,6 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import crypto from "node:crypto";
+import { getAdminDatabase } from "@/lib/firebase-admin";
 
 export type UserRole = "admin" | "editor" | "viewer";
 
@@ -34,26 +33,30 @@ export interface PublicAuthUser {
   createdAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const AUTH_FILE = path.join(DATA_DIR, "auth.json");
-
-async function ensureDataDir() {
-  await mkdir(DATA_DIR, { recursive: true });
-}
+const AUTH_NODE = "appData/auth";
 
 async function readAuthData(): Promise<AuthData> {
   try {
-    await ensureDataDir();
-    const content = await readFile(AUTH_FILE, "utf-8");
-    return JSON.parse(content);
+    const db = getAdminDatabase();
+    const snapshot = await db.ref(AUTH_NODE).get();
+    const raw = snapshot.val() as Partial<AuthData> | null;
+    if (!raw) {
+      return { sessions: {} };
+    }
+
+    return {
+      passwordHash: raw.passwordHash,
+      users: raw.users || [],
+      sessions: raw.sessions || {},
+    };
   } catch {
     return { sessions: {} };
   }
 }
 
 async function writeAuthData(data: AuthData): Promise<void> {
-  await ensureDataDir();
-  await writeFile(AUTH_FILE, JSON.stringify(data, null, 2));
+  const db = getAdminDatabase();
+  await db.ref(AUTH_NODE).set(data);
 }
 
 function hashPassword(password: string): string {

@@ -3,6 +3,7 @@ import { getExistingBucket } from "@/lib/firebase-admin";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { assertAuthorized } from "@/lib/accessControl";
+import { encryptFileBuffer } from "@/lib/fileEncryption";
 
 export const runtime = "nodejs";
 
@@ -29,43 +30,44 @@ export async function POST(request: Request) {
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+    const encryptedBuffer = encryptFileBuffer(buffer);
 
     let url = "";
+    let savedName = sanitizedName;
 
     try {
       const bucket = await getExistingBucket();
       const objectPath = `uploads/${sanitizedName}`;
       const object = bucket.file(objectPath);
 
-      await object.save(buffer, {
+      await object.save(encryptedBuffer, {
         metadata: {
-          contentType: file.type || "application/octet-stream",
+          contentType: "application/octet-stream",
+          metadata: {
+            encrypted: "1",
+            originalContentType: file.type || "application/octet-stream",
+          },
         },
         resumable: false,
       });
 
-      const [signedUrl] = await object.getSignedUrl({
-        action: "read",
-        version: "v4",
-        expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
-      });
-
-      url = signedUrl;
+      url = `/api/files/download?name=${encodeURIComponent(sanitizedName)}`;
     } catch {
-      // Fallback: save into local public/uploads when Firebase bucket is unavailable.
-      const uploadsDir = path.join(process.cwd(), "public", "uploads");
+      // Fallback: use /tmp storage for local runtime compatibility.
+      const uploadsDir = path.join("/tmp", "jrkitt_uploads");
       await mkdir(uploadsDir, { recursive: true });
 
       const localFileName = `${Date.now()}_${sanitizedName}`;
       const localFilePath = path.join(uploadsDir, localFileName);
 
-      await writeFile(localFilePath, buffer);
-      url = `/uploads/${encodeURIComponent(localFileName)}`;
+      await writeFile(localFilePath, encryptedBuffer);
+      savedName = localFileName;
+      url = `/api/files/download?name=${encodeURIComponent(localFileName)}`;
     }
 
     return NextResponse.json({
       success: true,
-      name: sanitizedName,
+      name: savedName,
       url,
       size: file.size,
       uploadedAt: new Date().toISOString(),

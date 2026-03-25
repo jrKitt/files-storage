@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { getAdminDatabase } from "@/lib/firebase-admin";
 
 interface Tag {
   id: string;
@@ -17,26 +16,29 @@ interface TagsData {
   fileTags: FileTags;
 }
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const TAGS_FILE = path.join(DATA_DIR, "tags.json");
-
-async function ensureDataDir() {
-  await mkdir(DATA_DIR, { recursive: true });
-}
+const TAGS_NODE = "appData/tags";
 
 async function readTagsData(): Promise<TagsData> {
   try {
-    await ensureDataDir();
-    const content = await readFile(TAGS_FILE, "utf-8");
-    return JSON.parse(content);
+    const db = getAdminDatabase();
+    const snapshot = await db.ref(TAGS_NODE).get();
+    const raw = snapshot.val() as Partial<TagsData> | null;
+    if (!raw) {
+      return { tags: [], fileTags: {} };
+    }
+
+    return {
+      tags: raw.tags || [],
+      fileTags: raw.fileTags || {},
+    };
   } catch {
     return { tags: [], fileTags: {} };
   }
 }
 
 async function writeTagsData(data: TagsData): Promise<void> {
-  await ensureDataDir();
-  await writeFile(TAGS_FILE, JSON.stringify(data, null, 2));
+  const db = getAdminDatabase();
+  await db.ref(TAGS_NODE).set(data);
 }
 
 export async function getAllTags(): Promise<Tag[]> {

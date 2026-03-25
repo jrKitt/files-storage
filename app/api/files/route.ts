@@ -36,11 +36,6 @@ export async function GET(request: Request) {
           .filter((file) => !file.name.endsWith("/"))
           .map(async (file) => {
             const [metadata] = await file.getMetadata();
-            const [signedUrl] = await file.getSignedUrl({
-              action: "read",
-              version: "v4",
-              expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
-            });
 
             const fileName = file.name.replace("uploads/", "");
             const tags = await getTagsForFile(fileName);
@@ -51,14 +46,14 @@ export async function GET(request: Request) {
               uploadedAt: metadata.timeCreated
                 ? new Date(metadata.timeCreated).toLocaleString("en-US")
                 : "Unknown date",
-              url: signedUrl,
+              url: `/api/files/download?name=${encodeURIComponent(fileName)}`,
               tags,
             };
           })
       );
     } catch {
-      // Fallback: list local files from public/uploads when Firebase bucket is unavailable.
-      const uploadsDir = path.join(process.cwd(), "public", "uploads");
+      // Fallback: list files from /tmp runtime storage.
+      const uploadsDir = path.join("/tmp", "jrkitt_uploads");
       await mkdir(uploadsDir, { recursive: true });
 
       const entries = await readdir(uploadsDir);
@@ -72,7 +67,7 @@ export async function GET(request: Request) {
             name: fileName,
             size: fileStat.size,
             uploadedAt: new Date(fileStat.mtime).toLocaleString("en-US"),
-            url: `/uploads/${encodeURIComponent(fileName)}`,
+            url: `/api/files/download?name=${encodeURIComponent(fileName)}`,
             tags,
           };
         })

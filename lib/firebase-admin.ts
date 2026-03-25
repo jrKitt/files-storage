@@ -1,4 +1,5 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getDatabase } from "firebase-admin/database";
 import { getStorage } from "firebase-admin/storage";
 
 function getPrivateKey(): string {
@@ -41,6 +42,28 @@ function getStorageBucket(): string {
   return bucket;
 }
 
+function getDatabaseUrlCandidates(): string[] {
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const region = process.env.FIREBASE_DATABASE_REGION || "asia-southeast1";
+
+  const candidates = [
+    process.env.FIREBASE_DATABASE_URL,
+    process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
+    projectId ? `https://${projectId}-default-rtdb.${region}.firebasedatabase.app` : undefined,
+    projectId ? `https://${projectId}-default-rtdb.firebaseio.com` : undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  return [...new Set(candidates)];
+}
+
+function getDatabaseUrl(): string {
+  const [first] = getDatabaseUrlCandidates();
+  if (!first) {
+    throw new Error("Missing FIREBASE_DATABASE_URL or NEXT_PUBLIC_FIREBASE_DATABASE_URL");
+  }
+  return first;
+}
+
 function getBucketCandidates(): string[] {
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
@@ -63,9 +86,14 @@ const app =
       privateKey: getPrivateKey(),
     }),
     storageBucket: getStorageBucket(),
+    databaseURL: getDatabaseUrl(),
   });
 
 export const adminStorage = getStorage(app);
+
+export function getAdminDatabase() {
+  return getDatabase(app);
+}
 
 export async function getExistingBucket() {
   const candidates = getBucketCandidates();
