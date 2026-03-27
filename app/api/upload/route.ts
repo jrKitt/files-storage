@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getExistingBucket } from "@/lib/firebase-admin";
+import { getAdminDatabase } from "@/lib/firebase-admin";
 import { assertAuthorized } from "@/lib/accessControl";
 import { encryptFileBuffer } from "@/lib/fileEncryption";
 
@@ -21,6 +21,10 @@ function normalizeUploadFileName(value: string): string {
   }
 
   return withoutControls;
+}
+
+function getFileKey(fileName: string): string {
+  return Buffer.from(fileName, "utf8").toString("base64url");
 }
 
 export async function POST(request: Request) {
@@ -48,19 +52,15 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(bytes);
     const encryptedBuffer = encryptFileBuffer(buffer);
 
-    const bucket = await getExistingBucket();
-    const objectPath = `uploads/${sanitizedName}`;
-    const object = bucket.file(objectPath);
-
-    await object.save(encryptedBuffer, {
-      metadata: {
-        contentType: "application/octet-stream",
-        metadata: {
-          encrypted: "1",
-          originalContentType: file.type || "application/octet-stream",
-        },
-      },
-      resumable: false,
+    const fileKey = getFileKey(sanitizedName);
+    const db = getAdminDatabase();
+    await db.ref(`encryptedFiles/${fileKey}`).set({
+      name: sanitizedName,
+      encryptedData: encryptedBuffer.toString("base64"),
+      size: file.size,
+      encryptedSize: encryptedBuffer.length,
+      contentType: file.type || "application/octet-stream",
+      uploadedAt: new Date().toISOString(),
     });
 
     const url = `/api/files/download?name=${encodeURIComponent(sanitizedName)}`;

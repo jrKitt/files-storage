@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getExistingBucket } from "@/lib/firebase-admin";
+import { getAdminDatabase } from "@/lib/firebase-admin";
 import { decryptFileBuffer } from "@/lib/fileEncryption";
 import { validateSession } from "@/lib/authStorage";
 
@@ -11,6 +11,10 @@ function sanitizeName(value: string): string {
     throw new Error("Invalid file name");
   }
   return trimmed;
+}
+
+function getFileKey(fileName: string): string {
+  return Buffer.from(fileName, "utf8").toString("base64url");
 }
 
 export async function GET(request: Request) {
@@ -26,23 +30,25 @@ export async function GET(request: Request) {
     const nameParam = url.searchParams.get("name") || "";
     const fileName = sanitizeName(nameParam);
 
-    const bucket = await getExistingBucket();
-    const object = bucket.file(`uploads/${fileName}`);
-    const [exists] = await object.exists();
-    if (!exists) {
+    type StoredFileRecord = {
+      name?: string;
+      encryptedData?: string;
+      contentType?: string;
+    };
+
+    const db = getAdminDatabase();
+    const fileKey = getFileKey(fileName);
+    const snapshot = await db.ref(`encryptedFiles/${fileKey}`).get();
+    const record = snapshot.val() as StoredFileRecord | null;
+
+    if (!record?.encryptedData) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
-    const [encryptedBytes, metadata] = await Promise.all([
-      object.download().then((result) => result[0]),
-      object.getMetadata().then((result) => result[0]),
-    ]);
+    const encryptedBytes = Buffer.from(record.encryptedData, "base64");
 
     const plainBytes = decryptFileBuffer(encryptedBytes);
-    const contentTypeRaw =
-      metadata.metadata?.originalContentType ||
-      metadata.contentType ||
-      "application/octet-stream";
+    const contentTypeRaw = record.contentType || "application/octet-stream";
     const contentType =
       typeof contentTypeRaw === "string" ? contentTypeRaw : "application/octet-stream";
     const fallbackFileName = fileName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");

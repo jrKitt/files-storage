@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getExistingBucket } from "@/lib/firebase-admin";
+import { getAdminDatabase } from "@/lib/firebase-admin";
 import { getTagsForFile, getFilesWithTag } from "@/lib/tagsStorage";
 import { validateSession } from "@/lib/authStorage";
 
@@ -17,6 +17,15 @@ export async function GET(request: Request) {
   const tagFilter = url.searchParams.get("tag");
 
   try {
+    type StoredFileRecord = {
+      name?: string;
+      size?: number;
+      encryptedSize?: number;
+      contentType?: string;
+      uploadedAt?: string;
+      encryptedData?: string;
+    };
+
     let filesList: Array<{
       name: string;
       size: number;
@@ -25,29 +34,31 @@ export async function GET(request: Request) {
       tags?: Array<{ id: string; name: string; color: string }>;
     }> = [];
 
-    const bucket = await getExistingBucket();
-    const [files] = await bucket.getFiles({ prefix: "uploads/" });
+    const db = getAdminDatabase();
+    const snapshot = await db.ref("encryptedFiles").get();
+    const records = (snapshot.val() || {}) as Record<string, StoredFileRecord>;
+    const entries = Object.values(records);
 
     filesList = await Promise.all(
-      files
-        .filter((file) => !file.name.endsWith("/"))
-        .map(async (file) => {
-          const [metadata] = await file.getMetadata();
-
-          const fileName = file.name.replace("uploads/", "");
+      entries
+        .filter((record) => typeof record.name === "string" && Boolean(record.name?.trim()))
+        .map(async (record) => {
+          const fileName = record.name as string;
           const tags = await getTagsForFile(fileName);
 
           return {
             name: fileName,
-            size: Number(metadata.size || 0),
-            uploadedAt: metadata.timeCreated
-              ? new Date(metadata.timeCreated).toLocaleString("en-US")
+            size: Number(record.size || 0),
+            uploadedAt: record.uploadedAt
+              ? new Date(record.uploadedAt).toLocaleString("en-US")
               : "Unknown date",
             url: `/api/files/download?name=${encodeURIComponent(fileName)}`,
             tags,
           };
         })
     );
+
+    filesList.sort((a, b) => (a.uploadedAt < b.uploadedAt ? 1 : -1));
 
     // Filter by tag if specified
     if (tagFilter) {

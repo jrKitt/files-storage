@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getExistingBucket } from "@/lib/firebase-admin";
+import { getAdminDatabase } from "@/lib/firebase-admin";
 import { validateSession } from "@/lib/authStorage";
 
 export const runtime = "nodejs";
@@ -32,20 +32,21 @@ export async function GET(request: Request) {
   const recommendedBytes = Math.max(1, recommendedGb) * 1024 * 1024 * 1024;
 
   try {
-    const bucket = await getExistingBucket();
-    const [files] = await bucket.getFiles({ prefix: "uploads/" });
+    type StoredFileRecord = {
+      size?: number;
+      encryptedSize?: number;
+    };
 
-    const objectFiles = files.filter((file) => !file.name.endsWith("/"));
-    const totalFiles = objectFiles.length;
+    const db = getAdminDatabase();
+    const snapshot = await db.ref("encryptedFiles").get();
+    const records = (snapshot.val() || {}) as Record<string, StoredFileRecord>;
+    const entries = Object.values(records);
 
-    const metadatas = await Promise.all(
-      objectFiles.map(async (file) => {
-        const [metadata] = await file.getMetadata();
-        return Number(metadata.size || 0);
-      })
-    );
-
-    const usedBytes = metadatas.reduce((acc, size) => acc + size, 0);
+    const totalFiles = entries.length;
+    const usedBytes = entries.reduce((acc, record) => {
+      const size = Number(record.size ?? record.encryptedSize ?? 0);
+      return acc + (Number.isFinite(size) ? size : 0);
+    }, 0);
     const firebaseStatus: FirebaseState = "online";
     const storageSource: StorageSource = "firebase";
 
