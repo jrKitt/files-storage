@@ -5,6 +5,24 @@ import { encryptFileBuffer } from "@/lib/fileEncryption";
 
 export const runtime = "nodejs";
 
+function normalizeUploadFileName(value: string): string {
+  const normalized = value.normalize("NFC").trim();
+  if (!normalized) {
+    throw new Error("Invalid file name");
+  }
+
+  if (normalized.includes("/") || normalized.includes("\\") || normalized.includes("..")) {
+    throw new Error("Invalid file name");
+  }
+
+  const withoutControls = normalized.replace(/[\u0000-\u001F\u007F]/g, "");
+  if (!withoutControls) {
+    throw new Error("Invalid file name");
+  }
+
+  return withoutControls;
+}
+
 export async function POST(request: Request) {
   const auth = await assertAuthorized(request, ["admin", "editor"]);
   if (!auth.ok) {
@@ -24,7 +42,7 @@ export async function POST(request: Request) {
     }
 
     const customName = typeof fileName === "string" && fileName.trim() ? fileName : file.name;
-    const sanitizedName = customName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const sanitizedName = normalizeUploadFileName(customName);
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);

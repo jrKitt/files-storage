@@ -45,11 +45,13 @@ export async function GET(request: Request) {
       "application/octet-stream";
     const contentType =
       typeof contentTypeRaw === "string" ? contentTypeRaw : "application/octet-stream";
+    const fallbackFileName = fileName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+    const encodedFileName = encodeURIComponent(fileName);
 
     return new NextResponse(new Uint8Array(plainBytes), {
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${fileName}"`,
+        "Content-Disposition": `attachment; filename="${fallbackFileName}"; filename*=UTF-8''${encodedFileName}`,
         "Cache-Control": "no-store",
       },
     });
