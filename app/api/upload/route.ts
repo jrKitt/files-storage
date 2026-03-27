@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { getExistingBucket } from "@/lib/firebase-admin";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { assertAuthorized } from "@/lib/accessControl";
 import { encryptFileBuffer } from "@/lib/fileEncryption";
 
@@ -32,42 +30,26 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(bytes);
     const encryptedBuffer = encryptFileBuffer(buffer);
 
-    let url = "";
-    let savedName = sanitizedName;
+    const bucket = await getExistingBucket();
+    const objectPath = `uploads/${sanitizedName}`;
+    const object = bucket.file(objectPath);
 
-    try {
-      const bucket = await getExistingBucket();
-      const objectPath = `uploads/${sanitizedName}`;
-      const object = bucket.file(objectPath);
-
-      await object.save(encryptedBuffer, {
+    await object.save(encryptedBuffer, {
+      metadata: {
+        contentType: "application/octet-stream",
         metadata: {
-          contentType: "application/octet-stream",
-          metadata: {
-            encrypted: "1",
-            originalContentType: file.type || "application/octet-stream",
-          },
+          encrypted: "1",
+          originalContentType: file.type || "application/octet-stream",
         },
-        resumable: false,
-      });
+      },
+      resumable: false,
+    });
 
-      url = `/api/files/download?name=${encodeURIComponent(sanitizedName)}`;
-    } catch {
-      // Fallback: use /tmp storage for local runtime compatibility.
-      const uploadsDir = path.join("/tmp", "jrkitt_uploads");
-      await mkdir(uploadsDir, { recursive: true });
-
-      const localFileName = `${Date.now()}_${sanitizedName}`;
-      const localFilePath = path.join(uploadsDir, localFileName);
-
-      await writeFile(localFilePath, encryptedBuffer);
-      savedName = localFileName;
-      url = `/api/files/download?name=${encodeURIComponent(localFileName)}`;
-    }
+    const url = `/api/files/download?name=${encodeURIComponent(sanitizedName)}`;
 
     return NextResponse.json({
       success: true,
-      name: savedName,
+      name: sanitizedName,
       url,
       size: file.size,
       uploadedAt: new Date().toISOString(),

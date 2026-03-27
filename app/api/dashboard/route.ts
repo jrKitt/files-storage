@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { mkdir, readdir, stat } from "node:fs/promises";
-import path from "node:path";
 import { getExistingBucket } from "@/lib/firebase-admin";
 import { validateSession } from "@/lib/authStorage";
 
 export const runtime = "nodejs";
 
 type FirebaseState = "online" | "offline";
-type StorageSource = "firebase" | "local";
+type StorageSource = "firebase";
 
 interface DashboardResponse {
   totalFiles: number;
@@ -34,45 +32,22 @@ export async function GET(request: Request) {
   const recommendedBytes = Math.max(1, recommendedGb) * 1024 * 1024 * 1024;
 
   try {
-    let totalFiles = 0;
-    let usedBytes = 0;
-    let firebaseStatus: FirebaseState = "offline";
-    let storageSource: StorageSource = "local";
+    const bucket = await getExistingBucket();
+    const [files] = await bucket.getFiles({ prefix: "uploads/" });
 
-    try {
-      const bucket = await getExistingBucket();
-      const [files] = await bucket.getFiles({ prefix: "uploads/" });
+    const objectFiles = files.filter((file) => !file.name.endsWith("/"));
+    const totalFiles = objectFiles.length;
 
-      const objectFiles = files.filter((file) => !file.name.endsWith("/"));
-      totalFiles = objectFiles.length;
+    const metadatas = await Promise.all(
+      objectFiles.map(async (file) => {
+        const [metadata] = await file.getMetadata();
+        return Number(metadata.size || 0);
+      })
+    );
 
-      const metadatas = await Promise.all(
-        objectFiles.map(async (file) => {
-          const [metadata] = await file.getMetadata();
-          return Number(metadata.size || 0);
-        })
-      );
-
-      usedBytes = metadatas.reduce((acc, size) => acc + size, 0);
-      firebaseStatus = "online";
-      storageSource = "firebase";
-    } catch {
-      const uploadsDir = path.join(process.cwd(), "public", "uploads");
-      await mkdir(uploadsDir, { recursive: true });
-      const entries = await readdir(uploadsDir);
-
-      const fileStats = await Promise.all(
-        entries.map(async (fileName) => {
-          const filePath = path.join(uploadsDir, fileName);
-          return stat(filePath);
-        })
-      );
-
-      totalFiles = fileStats.length;
-      usedBytes = fileStats.reduce((acc, fileStat) => acc + fileStat.size, 0);
-      firebaseStatus = "offline";
-      storageSource = "local";
-    }
+    const usedBytes = metadatas.reduce((acc, size) => acc + size, 0);
+    const firebaseStatus: FirebaseState = "online";
+    const storageSource: StorageSource = "firebase";
 
     const usagePercent = Math.min(100, (usedBytes / recommendedBytes) * 100);
 
