@@ -1,6 +1,6 @@
 "use client";
 
-type MenuKey = "storage" | "tags" | "settings" | "github";
+type MenuKey = "storage" | "tags" | "settings" | "github" | "github-status";
 type UserRole = "admin" | "editor" | "viewer";
 
 interface SidebarProps {
@@ -30,6 +30,9 @@ export default function Sidebar({
       : []),
     ...(userRole === "admin" || userRole === "editor"
       ? [{ key: "github" as const, label: "GitHub", description: "jrkitt repositories" }]
+      : []),
+    ...(userRole === "admin"
+      ? [{ key: "github-status" as const, label: "GitHub Status", description: "Project uptime board" }]
       : []),
   ];
 

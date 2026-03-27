@@ -8,6 +8,7 @@ import FileUploader from "./components/FileUploader";
 import TagsPanel from "./components/TagsPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import GitHubManagement from "./components/GitHubManagement";
+import GitHubStatusDashboard from "./components/GitHubStatusDashboard";
 import { addTransactionNotification } from "@/lib/transactionNotifications";
 
 interface Tag {
@@ -25,7 +26,7 @@ interface SessionUser {
   role: UserRole;
 }
 
-type MenuKey = "storage" | "tags" | "settings" | "github";
+type MenuKey = "storage" | "tags" | "settings" | "github" | "github-status";
 
 export default function Home() {
   const [token, setToken] = useState<string>("");
@@ -40,6 +41,7 @@ export default function Home() {
   const canManageTags = userRole === "admin" || userRole === "editor";
   const canAccessSettings = userRole === "admin";
   const canAccessGitHub = userRole === "admin" || userRole === "editor";
+  const canAccessGitHubStatus = userRole === "admin";
 
   useEffect(() => {
     const storedToken = localStorage.getItem("auth_token");
@@ -165,12 +167,13 @@ export default function Home() {
       activeMenu === "storage" ||
       (activeMenu === "tags" && canManageTags) ||
       (activeMenu === "settings" && canAccessSettings) ||
-      (activeMenu === "github" && canAccessGitHub);
+      (activeMenu === "github" && canAccessGitHub) ||
+      (activeMenu === "github-status" && canAccessGitHubStatus);
 
     if (!menuAllowed) {
       setActiveMenu("storage");
     }
-  }, [activeMenu, canManageTags, canAccessSettings, canAccessGitHub]);
+  }, [activeMenu, canManageTags, canAccessSettings, canAccessGitHub, canAccessGitHubStatus]);
 
   useEffect(() => {
     setIsMobileSidebarOpen(false);
@@ -230,6 +233,10 @@ export default function Home() {
           {activeMenu === "settings" && canAccessSettings && <SettingsPanel token={token} />}
 
           {activeMenu === "github" && canAccessGitHub && <GitHubManagement token={token} canEdit={canAccessGitHub} />}
+
+          {activeMenu === "github-status" && canAccessGitHubStatus && (
+            <GitHubStatusDashboard token={token} />
+          )}
         </div>
       </div>
     </div>
